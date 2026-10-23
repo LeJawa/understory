@@ -43,14 +43,46 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
     {
       title: "Query the knowledge base",
       description: queryDescription(seed),
-      inputSchema: { question: z.string().describe("The question to answer") },
+      inputSchema: z
+        .object({
+          question: z.string().optional().describe("The question to answer"),
+          query: z.string().optional().describe("Alias for 'question' — the query to run"),
+        })
+        .passthrough()
+        .describe(
+          "Question to ask the knowledge base. Use 'question' or 'query'. " +
+          "Any additional properties will be ignored."
+        ),
     },
-    async ({ question }, extra) => {
+    async (input, extra) => {
+      const question = input.question ?? input.query ?? "";
+      // Collect any unrecognized properties for a warning.
+      const knownKeys = new Set(["question", "query"]);
+      const extraKeys = Object.keys(input).filter((k) => !knownKeys.has(k));
+      const warningText =
+        extraKeys.length > 0
+          ? `\n\n⚠ Warning: unrecognized properties were ignored: ${extraKeys.join(", ")}`
+          : "";
+
+      if (!question) {
+        return {
+          content: [{ type: "text", text: `No query provided. Please supply 'question' or 'query'.${warningText}` }],
+          isError: true,
+        };
+      }
+
       const { answer, source } = await runQueryCached(kb, question, { abortSignal: cancelOn(extra.signal) });
       const marker = source === "cache" ? "\n\n(cached answer)" : source === "hot" ? "\n\n(hot memory)" : "";
-      return {
+      const response = {
         content: [{ type: "text", text: `${answer}${marker}` }],
       };
+      if (warningText) {
+        response.content = response.content.map((c) => ({
+          ...c,
+          text: (c as { text: string }).text + warningText,
+        }));
+      }
+      return response;
     }
   );
 
@@ -104,15 +136,40 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
       title: "Add knowledge",
       description:
         "Provide free-form knowledge (facts, docs, decisions, runbooks). An internal agent searches for overlap, then creates or extends OKF concepts; indexes and the update log are maintained automatically.",
-      inputSchema: {
-        content: z.string().describe("The knowledge to record, in any prose form"),
-        suggested_path: z
-          .string()
-          .optional()
-          .describe('Optional bundle path hint, e.g. "/apis/payments.md"'),
-      },
+      inputSchema: z
+        .object({
+          content: z.string().optional().describe("The knowledge to record, in any prose form"),
+          text: z.string().optional().describe("Alias for 'content' — the knowledge to record"),
+          suggested_path: z
+            .string()
+            .optional()
+            .describe('Optional bundle path hint, e.g. "/apis/payments.md"'),
+        })
+        .passthrough()
+        .describe(
+          "Knowledge to record. Use 'content' or 'text' for the knowledge body. " +
+          "Any additional properties will be ignored."
+        ),
     },
-    async ({ content, suggested_path }, extra) => {
+    async (input, extra) => {
+      // Resolve content from either 'content' or 'text' property.
+      const content = input.content ?? input.text ?? "";
+      const suggested_path = input.suggested_path;
+      // Collect any unrecognized properties for a warning.
+      const knownKeys = new Set(["content", "text", "suggested_path"]);
+      const extraKeys = Object.keys(input).filter((k) => !knownKeys.has(k));
+      const warningText =
+        extraKeys.length > 0
+          ? `\n\n⚠ Warning: unrecognized properties were ignored: ${extraKeys.join(", ")}`
+          : "";
+
+      if (!content) {
+        return {
+          content: [{ type: "text", text: `No knowledge provided. Please supply 'content' or 'text'.${warningText}` }],
+          isError: true,
+        };
+      }
+
       // Wrap the payload as an explicit directive. Bare content (e.g. a plain
       // fact like "The user's name is Anirban Kar.") otherwise reads as a chat
       // message and the agent replies conversationally instead of persisting it.
@@ -128,7 +185,15 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
         (suggested_path ? `\n\nIf it fits, place new content at ${suggested_path}.` : "");
       const outcome = await runMutation(kb, instruction, { abortSignal: cancelOn(extra.signal) });
       await refreshSeed();
-      return mutationOutcomeResponse(outcome);
+      const response = mutationOutcomeResponse(outcome);
+      // Append the warning about ignored properties if applicable.
+      if (warningText && response.content) {
+        response.content = response.content.map((c) => ({
+          ...c,
+          text: (c as { text: string }).text + warningText,
+        }));
+      }
+      return response;
     }
   );
 
