@@ -55,14 +55,24 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
         ),
     },
     async (input, extra) => {
-      const question = input.question ?? input.query ?? "";
       // Collect any unrecognized properties for a warning.
       const knownKeys = new Set(["question", "query"]);
       const extraKeys = Object.keys(input).filter((k) => !knownKeys.has(k));
-      const warningText =
+
+      const hasQuestion = input.question !== undefined && input.question !== "";
+      const hasQuery = input.query !== undefined && input.query !== "";
+      const question = hasQuestion ? input.question : input.query ?? "";
+
+      // Warn if both 'question' and 'query' are provided (ambiguous).
+      const duplicateWarning =
+        hasQuestion && hasQuery
+          ? `\n\n⚠ Warning: both 'question' and 'query' were provided; 'question' was used and 'query' was ignored.`
+          : "";
+      const extraWarning =
         extraKeys.length > 0
           ? `\n\n⚠ Warning: unrecognized properties were ignored: ${extraKeys.join(", ")}`
           : "";
+      const warningText = duplicateWarning + extraWarning;
 
       if (!question) {
         return {
@@ -153,15 +163,25 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
     },
     async (input, extra) => {
       // Resolve content from either 'content' or 'text' property.
-      const content = input.content ?? input.text ?? "";
       const suggested_path = input.suggested_path;
       // Collect any unrecognized properties for a warning.
       const knownKeys = new Set(["content", "text", "suggested_path"]);
       const extraKeys = Object.keys(input).filter((k) => !knownKeys.has(k));
-      const warningText =
+
+      const hasContent = input.content !== undefined && input.content !== "";
+      const hasText = input.text !== undefined && input.text !== "";
+      const content = hasContent ? input.content : input.text ?? "";
+
+      // Warn if both 'content' and 'text' are provided (ambiguous).
+      const duplicateWarning =
+        hasContent && hasText
+          ? `\n\n⚠ Warning: both 'content' and 'text' were provided; 'content' was used and 'text' was ignored.`
+          : "";
+      const extraWarning =
         extraKeys.length > 0
           ? `\n\n⚠ Warning: unrecognized properties were ignored: ${extraKeys.join(", ")}`
           : "";
+      const warningText = duplicateWarning + extraWarning;
 
       if (!content) {
         return {
