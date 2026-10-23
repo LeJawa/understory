@@ -66,20 +66,20 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
 
       if (!question) {
         return {
-          content: [{ type: "text", text: `No query provided. Please supply 'question' or 'query'.${warningText}` }],
+          content: [{ type: "text" as const, text: `No query provided. Please supply 'question' or 'query'.${warningText}` }],
           isError: true,
         };
       }
 
       const { answer, source } = await runQueryCached(kb, question, { abortSignal: cancelOn(extra.signal) });
       const marker = source === "cache" ? "\n\n(cached answer)" : source === "hot" ? "\n\n(hot memory)" : "";
-      const response = {
-        content: [{ type: "text", text: `${answer}${marker}` }],
+      const response: { content: { type: "text"; text: string }[] } = {
+        content: [{ type: "text" as const, text: `${answer}${marker}` }],
       };
       if (warningText) {
         response.content = response.content.map((c) => ({
           ...c,
-          text: (c as { text: string }).text + warningText,
+          text: c.text + warningText,
         }));
       }
       return response;
@@ -165,7 +165,7 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
 
       if (!content) {
         return {
-          content: [{ type: "text", text: `No knowledge provided. Please supply 'content' or 'text'.${warningText}` }],
+          content: [{ type: "text" as const, text: `No knowledge provided. Please supply 'content' or 'text'.${warningText}` }],
           isError: true,
         };
       }
@@ -190,7 +190,7 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
       if (warningText && response.content) {
         response.content = response.content.map((c) => ({
           ...c,
-          text: (c as { text: string }).text + warningText,
+          text: c.text + warningText,
         }));
       }
       return response;
@@ -227,7 +227,7 @@ export async function buildMcpServer(kb: KnowledgeBase, abortSignal?: AbortSigna
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: JSON.stringify(
               {
                 conformant: report.conformant,
